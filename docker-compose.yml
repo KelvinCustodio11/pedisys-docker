@@ -1,19 +1,29 @@
-version: "3.1"
+# version: "3.1"
 
 services:
-  bagisto-php-apache:
+  bagisto-php:
     build:
-      args:
-        uid: 1000
-        user: $USER
-        container_project_path: /var/www/html/
       context: .
       dockerfile: ./Dockerfile
-    image: bagisto-php-apache
-    ports:
-      - 80:80
+    image: bagisto-php-fpm
     volumes:
-      - ./workspace/:/var/www/html/
+      - ./workspace:/var/www/html
+    expose:
+      - "80"
+    networks:
+      - bagisto-network
+
+  bagisto-nginx:
+    image: nginx:latest
+    ports:
+      - 8888:80
+    volumes:
+      - ./workspace:/var/www/html
+      - ./.configs/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - bagisto-php
+    networks:
+      - bagisto-network
 
   bagisto-mysql:
     image: mysql:8.0
@@ -21,10 +31,13 @@ services:
     environment:
       MYSQL_ROOT_HOST: "%"
       MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: bagisto
     ports:
       - 3306:3306
     volumes:
       - ./.configs/mysql-data:/var/lib/mysql/
+    networks:
+      - bagisto-network
 
   bagisto-redis:
     image: redis:6.2-alpine
@@ -33,6 +46,8 @@ services:
     command: redis-server --save 20 1 --loglevel warning
     volumes:
       - ./.configs/redis-data:/data
+    networks:
+      - bagisto-network
 
   bagisto-phpmyadmin:
     image: phpmyadmin:latest
@@ -43,6 +58,8 @@ services:
       UPLOAD_LIMIT: 512M
     ports:
       - 8080:80
+    networks:
+      - bagisto-network
 
   bagisto-elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.0
@@ -63,6 +80,8 @@ services:
     ports:
       - 9200:9200
       - 9300:9300
+    networks:
+      - bagisto-network
 
   bagisto-kibana:
     image: docker.elastic.co/kibana/kibana:7.17.0
@@ -72,13 +91,19 @@ services:
       - 5601:5601
     depends_on:
       - bagisto-elasticsearch
+    networks:
+      - bagisto-network
 
   bagisto-mailpit:
     image: axllent/mailpit:latest
     logging:
-        # Disable saving logs.
-        driver: 'none'
+      driver: 'none'
     ports:
-        # SMTP server.
-        - 1025:1025
-        - 8025:8025
+      - 1025:1025
+      - 8025:8025
+    networks:
+      - bagisto-network
+
+networks:
+  bagisto-network:
+    driver: bridge
